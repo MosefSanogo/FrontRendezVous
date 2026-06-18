@@ -12,6 +12,7 @@ import {
   Image,
   ScrollView,
   StyleSheet,
+  ToastAndroid,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -26,10 +27,14 @@ import TimeSlotGrid from "@/components/TimeSlotGrid";
 import ServiceSelector from "@/components/ServiceSelector";
 import { HomeStackNavigationProp } from "@/configs/home";
 import { Colors } from "@/constants/theme";
+import favorisService from "@/services/favoris.service";
 import serviceService from "@/services/service.service";
 import timeSlotService from "@/services/timeSlot.service";
+import { FavorisType } from "@/types/favoris.type";
 import { ServiceView, SousService } from "@/types/service";
 import { AvailabilityDay } from "@/types/timeSlot";
+import { existInFavoris } from "@/utils/favoris.util";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type DetailRouteProp = RouteProp<{ params: { id: string | number } }, "params">;
 
@@ -47,16 +52,47 @@ const DetailScreen = () => {
   const [selectedHeure, setSelectedHeure] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [selectedService, setSelectedService] = useState<string | number>("");
-  const [sousServiceId, setSousServiceId] = useState<string | number>("");
+  const [user, setUser] = useState({
+    id: "",
+    nom: "",
+    prenom: "",
+    tel: "",
+  });
   const [heart, setHeart] = useState<boolean>(false);
   const [loader, setLoader] = useState<boolean>(false);
   const [service, setService] = useState<ServiceView | null>(null);
+  const [favoris, setFavoris] = useState<FavorisType[]>([]);
   const [subServices, setSubServices] = useState<SousService[]>([]);
   const [timeSlots, setTimeSlots] = useState<AvailabilityDay>({
     date: "",
     total_slots: 0,
     time_slots: [],
   });
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadService = async () => {
+        try {
+          const userData = await AsyncStorage.getItem("user");
+          if (userData) {
+            const currentUser = JSON.parse(userData);
+
+            setUser(currentUser);
+
+            const data = await favorisService.getAllFavoris(currentUser.id);
+            setFavoris(data);
+            if (existInFavoris(data, id)) {
+              setHeart(true);
+            }
+          }
+        } catch (error: any) {
+          console.log(error.response?.config?.url);
+          console.log(error.response?.status);
+          console.log(error.response?.data);
+        }
+      };
+      loadService();
+    }, []),
+  );
   useFocusEffect(
     React.useCallback(() => {
       const loadService = async () => {
@@ -120,8 +156,28 @@ const DetailScreen = () => {
   const handleServiceSelect = (id: string | number, heure: string) => {
     setSelectedService(id);
   };
-  const handleHeart = () => {
-    setHeart(!heart);
+  const handleHeart = async () => {
+    if (!user) {
+      ToastAndroid.show(
+        "Veuillez prendre un rendez pour mettre en favoris",
+        ToastAndroid.SHORT,
+      );
+      return;
+    }
+    if (existInFavoris(favoris, id)) {
+      await favorisService.deteleFavoris(id, user.id);
+
+      setFavoris((prev) => prev.filter((v) => v.service_id !== id));
+
+      setHeart(false);
+    } else {
+      await favorisService.registerFavoris({
+        serviceId: id,
+        citoyenId: user.id,
+      });
+      setFavoris((prev) => [...prev, { service_id: id, citoyen_id: user.id }]);
+      setHeart(true);
+    }
   };
   const handleConfirm = () => {
     setIsSubmitting(true);
