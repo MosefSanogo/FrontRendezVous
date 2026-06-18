@@ -6,7 +6,7 @@ import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
 import { ThemedText } from "../themed-text";
 
 interface HomeCardProps {
-  data: Service;
+  data: Service | any;
   onClick: (id: string | number) => void;
 }
 
